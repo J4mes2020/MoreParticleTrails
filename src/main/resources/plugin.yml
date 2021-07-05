@@ -1,0 +1,12 @@
+name: MoreTrailParticles
+version: ${project.version}
+main: dev.odionwolf.moretrailparticles.MoreTrailParticles
+api-version: 1.17
+authors: [ OdionWolf ]
+description: Adds more trails for players
+website: odionwolf.dev
+
+commands:
+  moretrails:
+    aliases: [mtrails, ptrails]
+    description: Command for moretrails
