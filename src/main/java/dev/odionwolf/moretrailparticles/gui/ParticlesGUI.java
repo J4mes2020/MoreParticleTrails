@@ -1,21 +1,26 @@
 package dev.odionwolf.moretrailparticles.gui;
 
 import dev.odionwolf.moretrailparticles.MoreTrailParticles;
-import dev.odionwolf.moretrailparticles.runnables.SpawnParticleRunnable;
+import dev.odionwolf.moretrailparticles.syles.Circle;
+import dev.odionwolf.moretrailparticles.syles.Cylinder;
+import dev.odionwolf.moretrailparticles.syles.moving.MovingStyle;
+import dev.odionwolf.moretrailparticles.syles.moving.NotMovingRunnable;
 import dev.odionwolf.moretrailparticles.util.UtilClass;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashMap;
 import java.util.UUID;
@@ -27,26 +32,148 @@ public class ParticlesGUI implements Listener {
 
 
     HashMap<UUID, Particle> playerParticle = utilClass.playerParticleList;
-    HashMap<UUID, String> playerStyle = new HashMap<>();
+    HashMap<UUID, String> playerParticleStyle = new HashMap<>();
 
     Inventory particleInventoryPg1;
     Inventory particleInventoryPg2;
+    Inventory styleInventoryPg1;
+    BukkitTask task;
+    int period = 10;
+
+
     ItemStack submit = createItem(Material.GREEN_STAINED_GLASS_PANE, "#1ce302", "Submit", "Submit");
     ItemStack nextPg = createItem(Material.RED_STAINED_GLASS_PANE, "#de4343", "Next Page", "Next");
     ItemStack previousPg = createItem(Material.RED_STAINED_GLASS_PANE, "#de4343", "Previous Page", "Previous");
 
     public ParticlesGUI(MoreTrailParticles moreTrailParticles) {
         this.moreTrailParticles = moreTrailParticles;
+        Bukkit.getPluginManager().registerEvents(this, moreTrailParticles);
 
     }
 
     public void InventoryManager(Player player) {
+        createParticleGUI(player);
 
+
+    }
+
+
+    @EventHandler
+    public void onClick(InventoryClickEvent event) {
+
+        ItemStack item = event.getCurrentItem();
+        Player player = (Player) event.getWhoClicked();
+
+        if (item != null) {
+
+            if (event.getInventory() == particleInventoryPg1 || event.getInventory() == particleInventoryPg2) {
+
+                event.setCancelled(true);
+                UtilClass.sendMessage(player, "&a" + item.getItemMeta().getLocalizedName() + " Selected");
+
+                if (item.isSimilar(submit)) {
+                    if (playerParticle.containsKey(player.getUniqueId())) {
+                        UtilClass.sendMessage(player, "&aSubmitted");
+                        createStyleGUI(player);
+                        return;
+                    } else {
+                        UtilClass.sendMessage(player, "&cPlease select a particle!");
+                    }
+                }
+
+
+                if (item.isSimilar(nextPg)) {
+                    player.openInventory(particleInventoryPg2);
+                    return;
+                }
+
+                if (item.isSimilar(previousPg)) {
+                    player.openInventory(particleInventoryPg1);
+                    return;
+
+                }
+
+                utilClass.selectParticle(player, item.getItemMeta().getLocalizedName());
+            }
+
+            if (event.getInventory() == styleInventoryPg1 && playerParticle.containsKey(player.getUniqueId())) {
+                selectStyle(player, item.getItemMeta().getLocalizedName());
+            }
+
+        }
+    }
+
+    @EventHandler
+    public void onMove(PlayerMoveEvent event) {
+
+        if (getTask() != null) {
+
+            Player player = event.getPlayer();
+
+            Location beforeLocation = event.getFrom();
+            Location afterLocation = event.getTo();
+
+            if (beforeLocation.distance(afterLocation) >= 1 || isMoving(player)) {
+
+                getTask().cancel();
+                task = new MovingStyle(player, player.getWorld(), getParticle(player), moreTrailParticles).runTaskTimer(moreTrailParticles, 0, period);
+            }
+
+        }
+
+    }
+
+    public boolean isMoving(Player player) {
+
+        return player.isSprinting() || player.isSwimming() || player.isSneaking() || player.isGliding() || player.isRiptiding();
+    }
+
+
+
+    private ItemStack createItem(Material material, String color, String nameDisplay, String nameLocal) {
+        ItemStack item = new ItemStack(material, 1);
+        ItemMeta meta = item.getItemMeta();
+
+        // Set the name of the item
+        meta.setLocalizedName(nameLocal);
+        meta.setDisplayName(ChatColor.of(color) + "" + ChatColor.BOLD + nameDisplay);
+        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_POTION_EFFECTS);
+        item.setItemMeta(meta);
+
+        return item;
+    }
+
+    public void selectStyle(Player player, String itemName) {
+
+        setStyle(player, itemName);
+        UtilClass.sendMessage(player, "&a" + itemName + " Selected");
+        player.closeInventory();
+
+    }
+
+
+    void createStyleGUI(Player player) {
+        styleInventoryPg1 = Bukkit.createInventory(null, 54,
+                ChatColor.translateAlternateColorCodes('&', "&2TrailParticles Styles Pg 1"));
+
+        styleInventoryPg1.addItem(createItem(Material.SLIME_BALL, "#fc632b", "Circle", "Circle"));
+        styleInventoryPg1.addItem(createItem(Material.CLAY_BALL, "#dffc03", "Cylinder", "Cylinder"));
+        styleInventoryPg1.addItem(createItem(Material.FIRE_CHARGE, "#6f319e", "Helix", "Helix"));
+
+
+        styleInventoryPg1.setItem(49, submit);
+        player.openInventory(styleInventoryPg1);
+
+
+    }
+
+
+    void createParticleGUI(Player player) {
         particleInventoryPg1 = Bukkit.createInventory(null, 54,
-                ChatColor.translateAlternateColorCodes('&', "&2More TrailParticles Page 1"));
+                ChatColor.translateAlternateColorCodes('&', "&2TrailParticles Particles Pg 1"));
 
         particleInventoryPg2 = Bukkit.createInventory(null, 54,
-                ChatColor.translateAlternateColorCodes('&', "&2More TrailParticles Page 2"));
+                ChatColor.translateAlternateColorCodes('&', "&2TrailParticles Particles Pg 2"));
 
         particleInventoryPg1.addItem(createItem(Material.BASALT, "#545454", "ASH", "ASH"));
         particleInventoryPg1.addItem(createItem(Material.BARRIER, "#eb1a1a", "BARRIER", "BARRIER"));
@@ -88,7 +215,6 @@ public class ParticlesGUI implements Listener {
         particleInventoryPg1.setItem(50, nextPg);
         player.openInventory(particleInventoryPg1);
 
-
         particleInventoryPg2.addItem(createItem(Material.SOUL_SOIL, "#17b042", "SOUL FACES", "SOUL FACES"));
         particleInventoryPg2.addItem(createItem(Material.STICK, "#8b26ff", "SPELLS", "SPELLS"));
         particleInventoryPg2.addItem(createItem(Material.BLAZE_POWDER, "#ba26ff", "SPELLS MOB", "SPELLS MOB"));
@@ -108,65 +234,35 @@ public class ParticlesGUI implements Listener {
         particleInventoryPg2.addItem(createItem(Material.WHITE_DYE, "#ffffff", "WHITE ASH", "WHITE ASH"));
         particleInventoryPg2.setItem(49, submit);
         particleInventoryPg2.setItem(48, previousPg);
-
-
-
     }
 
-    private ItemStack createItem(Material material, String color, String nameDisplay, String nameLocal) {
-        ItemStack item = new ItemStack(material, 1);
-        ItemMeta meta = item.getItemMeta();
+    public Particle getParticle(Player player) {
 
-        // Set the name of the item
-        meta.setLocalizedName(nameLocal);
-        meta.setDisplayName(ChatColor.of(color) + "" + ChatColor.BOLD + nameDisplay);
-        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_POTION_EFFECTS);
-        item.setItemMeta(meta);
-
-        return item;
+        return playerParticle.get(player.getUniqueId());
     }
 
-    @EventHandler
-    public void onClick(InventoryClickEvent event) {
+    public void setStyle(Player player, String style) {
 
-        ItemStack item = event.getCurrentItem();
-        Player player = (Player) event.getWhoClicked();
-        World world = player.getWorld();
+        switch (style) {
 
-        if (item != null && (event.getInventory() == particleInventoryPg1 || event.getInventory() == particleInventoryPg2)) {
-
-            event.setCancelled(true);
-
-            if (item.isSimilar(submit)) {
-                UtilClass.sendMessage(player, "&aSubmitted");
-                player.closeInventory();
-                return;
-            }
-
-            if (item.isSimilar(nextPg)) {
-                player.closeInventory();
-                player.openInventory(particleInventoryPg2);
-                return;
-            }
-
-            if (item.isSimilar(previousPg)) {
-                player.closeInventory();
-                player.openInventory(particleInventoryPg1);
-                return;
-
-            }
-
-            utilClass.selectParticle(player, item.getItemMeta().getLocalizedName());
-
-            if (playerParticle.containsKey(player.getUniqueId())) {
-
-                new SpawnParticleRunnable(moreTrailParticles, world, player, playerParticle).runTaskTimer(moreTrailParticles, 0, 1);
-
-            }
-
+            case "Circle" -> task = new Circle(player, player.getWorld(), getParticle(player)).runTaskTimer(moreTrailParticles, 0, period);
+            case "Cylinder" -> task = new Cylinder(player, player.getWorld(), getParticle(player)).runTaskTimer(moreTrailParticles, 0, period);
 
         }
+        new NotMovingRunnable(player, this).runTaskTimer(moreTrailParticles, 0, period);
+
+        playerParticleStyle.put(player.getUniqueId(), style);
+    }
+
+    public String getStyle(Player player) {
+        return playerParticleStyle.get(player.getUniqueId());
+    }
+
+    public BukkitTask getTask() {
+
+        return task;
 
     }
+
 
 }
